@@ -1,0 +1,43 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for the livreshebdo_livreshebdo_newsletter module.
+ */
+
+/**
+ * Implements hook_schema().
+ */
+function livreshebdo_newsletter_schema() {
+  $schema['livreshebdo_newsletter_configs'] = array(
+    'fields' => array(
+      'cid' => array(
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'name' => array(
+        'type' => 'varchar',
+        'length' => 1024,
+        'not null' => TRUE,
+      ),
+      'configs' => array(
+        'type' => 'text',
+        'size' => 'big',
+        'not null' => FALSE,
+        'default' => NULL,
+      ),
+    ),
+    'primary key' => array('cid'),
+  );
+
+  return $schema;
+}
+
+/**
+ * Create livreshebdo_newsletter_configs table.
+ */
+function livreshebdo_newsletter_update_7005() {
+  db_drop_table('livreshebdo_newsletter_configs');
+  drupal_install_schema('livreshebdo_newsletter');
+}

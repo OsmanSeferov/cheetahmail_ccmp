@@ -1,0 +1,1473 @@
+<?php
+/**
+ * @file
+ * Code for the LivresHebdo Newsletter module.
+ */
+
+module_load_include('inc', 'cheetahmail_ccmp', 'includes/cheetahmail_ccmp.admin');
+module_load_include('inc', 'cheetahmail_ccmp', 'includes/cheetahmail_ccmp.cheetahmail');
+
+/**
+ * Defines.
+ */
+define('cheetahmail_ccmp_CT_NAME', 'newsletter_issue');
+define('cheetahmail_ccmp_TYPE_QUOTIDIENNE_TID', 742);
+define('cheetahmail_ccmp_TYPE_HEBDOMADAIRE_TID', 743);
+define('cheetahmail_ccmp_TYPE_DERNIERE_MINUTE_TID', 744);
+define('cheetahmail_ccmp_TYPE_SPECIALE_TID', 745);
+
+define('cheetahmail_ccmp_AUTOMATIC_ARTICLES_COUNT', 6);
+define('cheetahmail_ccmp_FILES_DESTINATION', 'newsletters');
+
+define('cheetahmail_ccmp_ELECTRE_FORCE_URL', 'http://electre.force.com/News/InfoNews');
+define('cheetahmail_ccmp_ELECTRE_FORCE_ACTION_PUBLICATION', 'Publication');
+define('cheetahmail_ccmp_ELECTRE_FORCE_ACTION_EXPORT', 'Export');
+
+define('cheetahmail_ccmp_UNSUBSCRIBE_LINK', 'user/unsubscribe');
+define('cheetahmail_ccmp_SUBSCRIBE_LINK',   'user/subscribe');
+
+define('cheetahmail_ccmp_ADD_CONFIG_URL', 'admin/config/livreshebdo/newsletter/settings/config/add');
+define('cheetahmail_ccmp_AJAX_URL', 'system/ajax/livreshebdo/newsletter');
+
+define('cheetahmail_ccmp_LOG', 'livreshebdo_cheetahmail');
+
+/**
+ * Implements hook_permission().
+ */
+function cheetahmail_ccmp_permission() {
+  return array(
+    'cheetahmail newsletter configuration' => array(
+      'title' => t('LivresHebdo Newsletter Configuration'),
+    ),
+    'cheetahmail newsletter publish' => array(
+      'title' => t('Access to Newsletter Publish option'),
+    ),
+    'cheetahmail newsletter send' => array(
+      'title' => t('Access to Newsletter Send option'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_menu().
+ */
+function cheetahmail_ccmp_menu() {
+  $items = array();
+
+  $items[cheetahmail_ccmp_UNSUBSCRIBE_LINK] = array(
+    'title' => 'Unsubscribe from our newsletter',
+    'page callback' => 'cheetahmail_ccmp_unsubscribe_callback',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items[cheetahmail_ccmp_SUBSCRIBE_LINK] = array(
+    'page callback' => 'cheetahmail_ccmp_subscribe_callback',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK
+  );
+
+  $items['admin/config/livreshebdo/newsletter'] = array(
+    'title' => 'Newsletter settings',
+    'type' => MENU_NORMAL_ITEM,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cheetahmail_ccmp_configs_list'),
+    'access arguments' => array('livreshebdo newsletter configuration'),
+    'file' => 'includes/cheetahmail_ccmp.admin.inc',
+  );
+
+  $items['admin/config/livreshebdo/newsletter/settings'] = array(
+    'title' => 'Newsletter settings',
+    'type' => MENU_DEFAULT_LOCAL_TASK,
+    'access arguments' => array('livreshebdo newsletter configuration'),
+  );
+  
+  $items['admin/config/livreshebdo/newsletter/cheetahmail'] = array(
+    'title' => 'Cheetahmail config',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cheetahmail_ccmp_cheetahmail_config'),
+    'access arguments' => array('livreshebdo newsletter configuration'),
+    'file' => 'includes/cheetahmail_ccmp.admin.inc',
+    'weight' => 101,
+  );
+  
+  $items['admin/config/livreshebdo/newsletter/ccmp'] = array(
+    'title' => 'CCMP config',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cheetahmail_ccmp_ccmp_config'),
+    'access arguments' => array('livreshebdo newsletter configuration'),
+    'file' => 'includes/cheetahmail_ccmp.admin.inc',
+    'weight' => 102,
+  );
+  
+  $items['admin/config/livreshebdo/newsletter/provider'] = array(
+    'title' => 'Newsletter provider settings',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cheetahmail_ccmp_configs_list_provider'),
+    'access arguments' => array('livreshebdo newsletter configuration'),
+    'file' => 'includes/cheetahmail_ccmp.admin.inc',
+    'weight' => 100,
+  );
+
+  $items['admin/config/livreshebdo/newsletter/access'] = array(
+    'title' => 'Cheetahmail access',
+    'type' => MENU_LOCAL_TASK,
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cheetahmail_ccmp_cheetahmail_access'),
+    'access arguments' => array('livreshebdo newsletter configuration'),
+    'file' => 'includes/cheetahmail_ccmp.admin.inc',
+    'weight' => 103,
+  );
+
+  $items['admin/config/livreshebdo/newsletter/settings/config/%/delete'] = array(
+    'title' => 'Delete',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cheetahmail_ccmp_config_delete_confirm', 6),
+    'access arguments' => array('livreshebdo newsletter configuration'),
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_INLINE,
+    'file' => 'includes/cheetahmail_ccmp.admin.inc',
+  );
+
+  $items[cheetahmail_ccmp_ADD_CONFIG_URL] = array(
+    'title' => 'Create newsletter configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cheetahmail_ccmp_config_form'),
+    'access arguments' => array('livreshebdo newsletter configuration'),
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_INLINE,
+    'file' => 'includes/cheetahmail_ccmp.admin.inc',
+  );
+
+  $items['admin/config/livreshebdo/newsletter/settings/config/%/edit'] = array(
+    'title' => 'Edit newsletter configuration',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('cheetahmail_ccmp_config_form', 6),
+    'access arguments' => array('livreshebdo newsletter configuration'),
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_INLINE,
+    'file' => 'includes/cheetahmail_ccmp.admin.inc',
+  );
+
+  $items['livreshebdo/article/autocomplete'] = array(
+    'page callback' => 'cheetahmail_ccmp_article_autocomplete',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  $items['system/ajax/livreshebdo/newsletter'] = array(
+    'page callback' => 'cheetahmail_ccmp_popup_ajax_callback',
+    'page arguments' => array(),
+    'access callback' => 'user_access',
+    'access arguments' => array('access content'),
+    'type' => MENU_CALLBACK,
+  );
+
+  return $items;
+}
+
+/**
+ * Page callback for unsubscription from newsletter
+ */
+function cheetahmail_ccmp_unsubscribe_callback() {
+  global $user;
+  if ($user->uid) {
+    drupal_goto('user/' . $user->uid, array(
+      'fragment' => 'user-newsletters',
+    ));
+  }
+  else {
+    setcookie('newsletter_unsubscribe', TRUE, REQUEST_TIME + 3600, '/');
+    drupal_goto('user/login');
+  }
+}
+
+/**
+ * Page callback for subscription from newsletter
+ */
+function cheetahmail_ccmp_subscribe_callback() {
+  global $user;
+  if ($user->uid) {
+    drupal_goto('user/' . $user->uid, array(
+      'fragment' => 'user-newsletters',
+    ));
+  }
+  else {
+    drupal_goto('<front>', array('fragment' => 'newsletter'));
+  }
+}
+
+/**
+ * Implements hook_theme().
+ */
+function cheetahmail_ccmp_theme() {
+  $theme = array();
+  $base = array(
+    'path' => drupal_get_path('module', 'cheetahmail_ccmp') . '/theme',
+    'file' => 'theme.inc',
+  );
+
+  $theme['cheetahmail_ccmp_popup1'] = array(
+    'variables' => array(
+      'subscribe_form' => NULL,
+    ),
+    'template' => 'livreshebdo-newsletter-popup1',
+  ) + $base;
+
+  $theme['cheetahmail_ccmp_popup2'] = array(
+    'variables' => array(
+      'email' => NULL,
+      'message' => NULL,
+    ),
+    'template' => 'livreshebdo-newsletter-popup2',
+  ) + $base;
+
+  $theme['cheetahmail_ccmp_popup3'] = array(
+    'variables' => array(
+      'message' => NULL,
+    ),
+    'template' => 'livreshebdo-newsletter-popup3',
+  ) + $base;
+
+  $theme['cheetahmail_ccmp_subscribe_form'] = array(
+    'render element' => 'form',
+    'template' => 'livreshebdo-newsletter-subscribe-form',
+  ) + $base;
+
+  $theme['cheetahmail_ccmp_user_profile_subscribe_form'] = array(
+    'render element' => 'form',
+    'template' => 'livreshebdo-newsletter-user-profile-subscribe-form',
+  ) + $base;
+
+
+  return $theme;
+}
+
+/**
+ * Implements hook_preprocess_html().
+ */
+function cheetahmail_ccmp_preprocess_html(&$variables) {
+  global $user;
+
+  if ($node = menu_get_object()) {
+    if (is_object($node)) {
+      $variables['theme_hook_suggestions'][] = 'html__node__' . $node->type;
+
+      if ($node->type == cheetahmail_ccmp_CT_NAME) {
+        global $base_url;
+        $variables['newsletter_theme_url'] = $base_url . base_path() . drupal_get_path('theme', 'livreshebdo');
+        $variables['newsletter_page_url'] = url('node/' . $node->nid, array('absolute' => TRUE));
+        $variables['newsletter_logo'] = theme('image', array(
+          'path' => drupal_get_path('theme', 'livreshebdo') . '/img/newsletter/logo.gif',
+        ));
+
+        // Add promotional background.
+        if (function_exists('cheetahmail_ccmp_get_promotional_css')) {
+          $promo_css = cheetahmail_ccmp_get_promotional_css();
+          if (!empty($promo_css)) {
+            $variables['promo_css'] = $promo_css;
+          }
+        }
+      }
+    }
+  }
+
+  // If user not logged then add content of newsletter subscribe popup.
+  if (!$user->uid) {
+    $variables['page']['page_bottom']['newsletter_popup1'] = array(
+      '#prefix' => '<a class="open-popup newsleter-subscribe-popup" href="#newsletter-popup1"></a><div class="newsletter-popup newsletter-popup-in" id="newsletter-popup1">',
+      '#suffix' => '</div>',
+      '#theme' => 'cheetahmail_ccmp_popup1',
+      '#subscribe_form' => drupal_get_form('cheetahmail_ccmp_subsrcibe_form'),
+    );
+    drupal_add_js(drupal_get_path('module', 'cheetahmail_ccmp') . '/js/cheetahmail_ccmp.js');
+  }
+
+  // Automatic show subscribe confirm popup.
+  if (isset($_SESSION['user_newsletter_popup_subscribe']) && $_SESSION['user_newsletter_popup_subscribe']) {
+    drupal_add_js(drupal_get_path('module', 'cheetahmail_ccmp') . '/js/cheetahmail_ccmp.js');
+    $variables['page']['page_bottom']['newsletter_popup2'] = array(
+      '#theme' => 'cheetahmail_ccmp_popup2',
+    );
+    $_SESSION['user_newsletter_popup_subscribe'] = FALSE;
+  }
+
+  // Automatic show unsubscribe popup.
+  if (isset($_SESSION['user_newsletter_popup_unsubscribe']) && $_SESSION['user_newsletter_popup_unsubscribe']) {
+    drupal_add_js(drupal_get_path('module', 'cheetahmail_ccmp') . '/js/cheetahmail_ccmp.js');
+    $variables['page']['page_bottom']['newsletter_popup3'] = array(
+      '#theme' => 'cheetahmail_ccmp_popup3',
+    );
+    $_SESSION['user_newsletter_popup_unsubscribe'] = FALSE;
+  }
+}
+
+/**
+ * Implements hook_preprocess_node().
+ */
+function cheetahmail_ccmp_preprocess_node(&$variables) {
+  global $base_url;
+  $variables['newsletter_theme_url'] = $base_url . base_path() . drupal_get_path('theme', 'livreshebdo');
+
+  $node = $variables['node'];
+  if ($node->type == cheetahmail_ccmp_CT_NAME) {
+    $variables['newsletter_logo'] = theme('image', array(
+      'path' => drupal_get_path('theme', 'livreshebdo') . '/img/newsletter/logo.gif',
+    ));
+
+    $type = field_get_items('node', $node, 'field_newsletter_type');
+    if (!empty($type)) {
+      $type = array_shift($type);
+      $variables['theme_hook_suggestions'][] = 'node__' . $node->type . '__' . $variables['view_mode'] . '__' . $type['target_id'];
+    }
+
+    $variables['newsletter_alerts'] = trim(views_embed_view('alerts', 'newsletter'));
+  }
+}
+
+/**
+ * Implements hook_preprocess_field().
+ */
+function cheetahmail_ccmp_preprocess_field(&$variables, $hook) {
+  global $base_url;
+  $variables['newsletter_theme_url'] = $base_url . base_path() . drupal_get_path('theme', 'livreshebdo');
+}
+
+/**
+ * Implements hook_form_alter().
+ */
+function cheetahmail_ccmp_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == cheetahmail_ccmp_CT_NAME . '_node_form') {
+    if (isset($form_state['triggering_element'])
+      && isset($form_state['triggering_element']['#field_name'])
+      && $form_state['triggering_element']['#field_name'] == 'field_newsletter_type') {
+      _cheetahmail_ccmp_articles_process_form($form, $form_state);
+    }
+
+    $form['#prefix'] = '<div id="newsletter-form-wrapper">' . (isset($form['#prefix']) ? $form['#prefix'] : '');
+    $form['#suffix'] = (isset($form['#suffix']) ? $form['#suffix'] : '') . '</div>';
+
+    $form['newsletter_params'] = array(
+      '#type' => 'container',
+      '#prefix' => '<div id="newsletter-params-wrapper">',
+      '#suffix' => '</div>',
+      '#weight' => $form['field_newsletter_type']['#weight'] + 0.001,
+    );
+
+    $form['newsletter_params']['field_newsletter_practical_infor'] = $form['field_newsletter_practical_infor'];
+    $form['newsletter_params']['field_newsletter_title'] = $form['field_newsletter_title'];
+    $form['newsletter_params']['field_newsletter_date'] = $form['field_newsletter_date'];
+    $form['newsletter_params']['field_newsletter_article'] = $form['field_newsletter_article'];
+    $form['newsletter_params']['field_newsletter_articles'] = $form['field_newsletter_articles'];
+    $form['options']['field_newsletter_send'] = $form['field_newsletter_send'];
+
+    $form['field_newsletter_practical_infor'] = array('#language' => LANGUAGE_NONE);
+    $form['field_newsletter_title'] = array('#language' => LANGUAGE_NONE);
+    $form['field_newsletter_date'] = array('#language' => LANGUAGE_NONE);
+    $form['field_newsletter_article'] = array('#language' => LANGUAGE_NONE);
+    $form['field_newsletter_articles'] = array('#language' => LANGUAGE_NONE);
+    $form['field_newsletter_send'] = array('#language' => LANGUAGE_NONE);
+
+    $form['options']['promote']['#access'] = FALSE;
+    $form['options']['sticky']['#access'] = FALSE;
+    $form['comment_settings']['#access'] = FALSE;
+
+    if (isset($form['field_newsletter_type'][LANGUAGE_NONE]['#default_value'][0]) && !empty($form['field_newsletter_type'][LANGUAGE_NONE]['#default_value'][0])
+      && in_array($form['field_newsletter_type'][LANGUAGE_NONE]['#default_value'][0], array(
+        cheetahmail_ccmp_TYPE_QUOTIDIENNE_TID,
+        cheetahmail_ccmp_TYPE_HEBDOMADAIRE_TID,
+        cheetahmail_ccmp_TYPE_SPECIALE_TID))) {
+      // Show newsletter_title field.
+      $form['newsletter_params']['field_newsletter_title']['#attributes']['class'] = array();
+
+      // Show newsletter_date field.
+      $form['newsletter_params']['field_newsletter_date']['#attributes']['class'] = array();
+
+      // Show newsletter_articles field.
+      $form['newsletter_params']['field_newsletter_articles']['#attributes']['class'] = array();
+
+      // Hide newsletter_article field.
+      $form['newsletter_params']['field_newsletter_article']['#attributes']['class'] = array('newsletter-hidden-element');
+
+    }
+    elseif (isset($form['field_newsletter_type'][LANGUAGE_NONE]['#default_value'][0]) && !empty($form['field_newsletter_type'][LANGUAGE_NONE]['#default_value'][0])) {
+      // Hide newsletter_title field.
+      // Support #131637
+      //$form['newsletter_params']['field_newsletter_title']['#attributes']['class'] = array('newsletter-hidden-element');
+
+      // Show field_newsletter_practical_infor field.
+      $form['newsletter_params']['field_newsletter_practical_infor']['#attributes']['class'] = array();
+
+      // Hide newsletter_date field.
+      $form['newsletter_params']['field_newsletter_date']['#attributes']['class'] = array('newsletter-hidden-element');
+
+      // Hide newsletter_articles field.
+      $form['newsletter_params']['field_newsletter_articles']['#attributes']['class'] = array('newsletter-hidden-element');
+
+      // Show newsletter_article field.
+      $form['newsletter_params']['field_newsletter_article']['#attributes']['class'] = array();
+
+    }
+    else {
+      // Hide newsletter_title field.
+      // Support #131637
+      //$form['newsletter_params']['field_newsletter_title']['#attributes']['class'] = array('newsletter-hidden-element');
+
+      // Hide field_newsletter_practical_infor field.
+      $form['newsletter_params']['field_newsletter_practical_infor']['#attributes']['class'] = array('newsletter-hidden-element');
+
+      // Hide newsletter_date field.
+      $form['newsletter_params']['field_newsletter_date']['#attributes']['class'] = array('newsletter-hidden-element');
+
+      // Hide newsletter_articles field.
+      $form['newsletter_params']['field_newsletter_articles']['#attributes']['class'] = array('newsletter-hidden-element');
+
+      // Hide newsletter_article field.
+      $form['newsletter_params']['field_newsletter_article']['#attributes']['class'] = array('newsletter-hidden-element');
+    }
+    $autocomplete_url = 'livreshebdo/article/autocomplete';
+    if (!empty($form_state['input']['field_newsletter_type'][LANGUAGE_NONE])) {
+      foreach ($form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE] as $id => $value) {
+        if (is_numeric($id) && isset($form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE][$id]['target_id']['#autocomplete_path'])) {
+          $form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE][$id]['target_id']['#autocomplete_path'] = $autocomplete_url;
+        }
+      }
+    }
+    else {
+      if (!empty($form_state['node']->field_newsletter_type[LANGUAGE_NONE][0]['target_id'])) {
+        foreach ($form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE] as $id => $value) {
+          if (isset($form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE][$id]['target_id']) && isset($form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE][$id]['target_id']['#autocomplete_path']) && isset($autocomplete_url)) {
+            $form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE][$id]['target_id']['#autocomplete_path'] = $autocomplete_url;
+          }
+        }
+      }
+    }
+    if (!empty($form['newsletter_params']['field_newsletter_article'][LANGUAGE_NONE][0])) {
+      $form['newsletter_params']['field_newsletter_article'][LANGUAGE_NONE][0]['target_id']['#autocomplete_path'] = $autocomplete_url;
+    }
+    $form['field_newsletter_type'][LANGUAGE_NONE]['#ajax'] = array(
+      'event' => 'change',
+      'callback' => 'cheetahmail_ccmp_change_type_callback',
+      'wrapper' => 'newsletter-params-wrapper',
+      'progress' => array(
+        'type' => 'throbber',
+        'message' => NULL,
+      ),
+    );
+
+    if (!user_access('livreshebdo newsletter publish')) {
+      $form['options']['status']['#access'] = FALSE;
+    }
+
+    if (!user_access('livreshebdo newsletter send')) {
+      $form['options']['field_newsletter_send']['#access'] = FALSE;
+    }
+
+    if (!user_access('livreshebdo newsletter publish') && !user_access('livreshebdo newsletter send')) {
+      $form['options']['#access'] = FALSE;
+    }
+  }
+}
+
+/**
+ * Implements hook_clientside_validation_form_alter().
+ */
+function cheetahmail_ccmp_clientside_validation_form_alter(&$form, &$form_state, &$js_rules) {
+ if ($form['#form_id'] == 'cheetahmail_ccmp_subsrcibe_form') {
+    _clientside_validation_set_equal(
+      $form['newsletter_password_confirm']['#name'], $form['newsletter_password_confirm']['#title'],
+      array(
+        'element_name' => $form['newsletter_password']['#name'],
+        'name' => $form['newsletter_password']['#title'],
+      ),
+      $js_rules
+    );
+
+    _clientside_validation_set_equal(
+      $form['newsletter_email_confirm']['#name'], $form['newsletter_email_confirm']['#title'],
+      array(
+        'element_name' => $form['newsletter_email']['#name'],
+        'name' => $form['newsletter_email']['#title'],
+      ),
+      $js_rules
+    );
+  }
+}
+
+/**
+ * Callback for both ajax-enabled inputs.
+ */
+function cheetahmail_ccmp_change_type_callback($form, $form_state) {
+  switch ($form['field_newsletter_type'][LANGUAGE_NONE]['#value']) {
+    case cheetahmail_ccmp_TYPE_QUOTIDIENNE_TID:
+    case cheetahmail_ccmp_TYPE_HEBDOMADAIRE_TID:
+    case cheetahmail_ccmp_TYPE_SPECIALE_TID:
+      // Show newsletter_title field.
+      $form['newsletter_params']['field_newsletter_title']['#attributes']['class'] = array();
+
+      if ($form['field_newsletter_type'][LANGUAGE_NONE]['#value'] == cheetahmail_ccmp_TYPE_QUOTIDIENNE_TID) {
+        $form['newsletter_params']['field_newsletter_title'][LANGUAGE_NONE][0]['value']['#value'] = t('News of the Book');
+      }
+      elseif ($form['field_newsletter_type'][LANGUAGE_NONE]['#value'] == cheetahmail_ccmp_TYPE_HEBDOMADAIRE_TID) {
+        $form['newsletter_params']['field_newsletter_title'][LANGUAGE_NONE][0]['value']['#value'] = t('Most read news this week');
+      }
+      else {
+        $form['newsletter_params']['field_newsletter_title'][LANGUAGE_NONE][0]['value']['#value'] = NULL;
+      }
+
+      // Show field_newsletter_practical_infor field.
+      $form['newsletter_params']['field_newsletter_practical_infor']['#attributes']['class'] = array();
+      $form['newsletter_params']['field_newsletter_practical_infor'][LANGUAGE_NONE][0]['value']['#value'] = NULL;
+
+      // Show newsletter_date field.
+      $form['newsletter_params']['field_newsletter_date']['#attributes']['class'] = array();
+      $form['newsletter_params']['field_newsletter_date'][LANGUAGE_NONE][0]['value']['#value'] = NULL;
+
+      // Show newsletter_articles field.
+      $form['newsletter_params']['field_newsletter_articles']['#attributes']['class'] = array();
+
+      // Hide newsletter_article field.
+      $form['newsletter_params']['field_newsletter_article']['#attributes']['class'] = array('newsletter-hidden-element');
+      $form['newsletter_params']['field_newsletter_article'][LANGUAGE_NONE][0]['target_id']['#value'] = NULL;
+
+      break;
+
+    case cheetahmail_ccmp_TYPE_DERNIERE_MINUTE_TID:
+      // Hide newsletter_title field.
+      // Support #131637
+//    $form['newsletter_params']['field_newsletter_title']['#attributes']['class'] = array('newsletter-hidden-element');
+      $form['newsletter_params']['field_newsletter_title']['#attributes']['class'] = array();
+      $form['newsletter_params']['field_newsletter_title'][LANGUAGE_NONE][0]['value']['#value'] = t('Last minute');
+
+      // Hide newsletter_date field.
+      $form['newsletter_params']['field_newsletter_date']['#attributes']['class'] = array('newsletter-hidden-element');
+      $form['newsletter_params']['field_newsletter_date'][LANGUAGE_NONE][0]['value']['#value'] = NULL;
+
+      // Hide newsletter_articles field.
+      $form['newsletter_params']['field_newsletter_articles']['#attributes']['class'] = array('newsletter-hidden-element');
+      foreach (element_get_visible_children($form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE]) as $element_id => $child) {
+        if (isset($form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE][$element_id]['target_id'])) {
+          $form['newsletter_params']['field_newsletter_articles'][LANGUAGE_NONE][$element_id]['target_id']['#value'] = NULL;
+         }
+      }
+
+      // Show field_newsletter_practical_infor field.
+      $form['newsletter_params']['field_newsletter_practical_infor']['#attributes']['class'] = array();
+      $form['newsletter_params']['field_newsletter_practical_infor'][LANGUAGE_NONE][0]['value']['#value'] = NULL;
+
+      // Show newsletter_article field.
+      $form['newsletter_params']['field_newsletter_article']['#attributes']['class'] = array();
+
+      break;
+  }
+
+  return $form['newsletter_params'];
+}
+
+function cheetahmail_ccmp_article_autocomplete($string) {
+  $query = new EntityFieldQuery;
+  $result = $query->entityCondition('entity_type', 'node')
+    ->propertyCondition('type', 'article')
+    ->propertyCondition('title', '%' . $string . '%', 'LIKE')
+    ->propertyCondition('status', NODE_PUBLISHED)
+    ->propertyOrderBy('created', 'DESC')
+    ->range(0, cheetahmail_ccmp_AUTOMATIC_ARTICLES_COUNT)
+    ->execute();
+
+  if (isset($result['node']) && !empty($result['node'])) {
+    foreach ($result['node'] as $node) {
+      $nodes = node_load($node->nid);
+      $title = '"' . $nodes->title .' '. '(' . $node->nid . ')"';
+      $articles[$title] = $title;
+    }
+    drupal_json_output($articles);
+  }
+  else {
+    drupal_json_output(FALSE);
+  }
+
+}
+
+/**
+ * Process a form submitted via AJAX to fill newsletter_articles field.
+ */
+function _cheetahmail_ccmp_articles_process_form(&$form, &$form_state) {
+  $articles = FALSE;
+
+  switch ($form_state['triggering_element']['#value']) {
+    case cheetahmail_ccmp_TYPE_QUOTIDIENNE_TID:
+    case cheetahmail_ccmp_TYPE_SPECIALE_TID:
+      // Get latest articles of this day.
+      $query = new EntityFieldQuery;
+      $result = $query->entityCondition('entity_type', 'node')
+        ->propertyCondition('type', 'article')
+        ->propertyCondition('status', NODE_PUBLISHED)
+        ->propertyCondition('created', strtotime('today'), '>')
+        ->propertyCondition('created', $form_state['values']['created'], '<')
+        ->propertyOrderBy('created', 'DESC')
+        ->range(0, cheetahmail_ccmp_AUTOMATIC_ARTICLES_COUNT)
+        ->execute();
+
+      if (isset($result['node']) && !empty($result['node'])) {
+        foreach ($result['node'] as $node) {
+          $articles[] = $node->nid;
+        }
+      }
+      break;
+
+    case cheetahmail_ccmp_TYPE_HEBDOMADAIRE_TID:
+      // Get latest articles of this week (From Saturday).
+      $query = new EntityFieldQuery;
+      $result = $query->entityCondition('entity_type', 'node')
+        ->propertyCondition('type', 'article')
+        ->propertyCondition('status', NODE_PUBLISHED)
+        ->propertyCondition('created', strtotime('last Saturday'), '>')
+        ->propertyCondition('created', $form_state['values']['created'], '<')
+        ->propertyOrderBy('created', 'DESC')
+        ->range(0, cheetahmail_ccmp_AUTOMATIC_ARTICLES_COUNT)
+        ->execute();
+
+      if (isset($result['node']) && !empty($result['node'])) {
+        foreach ($result['node'] as $node) {
+          $articles[] = $node->nid;
+        }
+      }
+      break;
+
+  }
+
+  //if ($articles) {
+  $form_state['node']->field_newsletter_articles[LANGUAGE_NONE] = array();
+  // We don't care about the installment field values that were submitted with
+  // the POST.
+  unset($form_state['values']['field_newsletter_articles']);
+  unset($form_state['input']['field_newsletter_articles']);
+
+  $items = array();
+  if (isset($articles) && !empty($articles)) {
+    foreach ($articles as $delta => $article) {
+      $items[$delta]['target_id'] = $article;
+      $form_state['node']->field_newsletter_articles[LANGUAGE_NONE][$delta] = $items[$delta];
+    }
+  }
+
+  // Update the items count for the field.
+  $form_state['field']['field_newsletter_articles'][LANGUAGE_NONE]['items_count'] = count($items);
+
+  // Build the field form with the new values.
+  $field = $form_state['field']['field_newsletter_articles'][LANGUAGE_NONE]['field'];
+  $instance = $form_state['field']['field_newsletter_articles'][LANGUAGE_NONE]['instance'];
+  $field_form = field_default_form('node', $form_state['node'], $field, $instance, LANGUAGE_NONE, $items, $form, $form_state);
+
+  // Replace the field form that was built previously with the new one.
+  //dpm($field_form['field_newsletter_articles']);
+  $form['field_newsletter_articles'] = $field_form['field_newsletter_articles'];
+  //}
+}
+
+/**
+ * Build newsletter subscribe form.
+ */
+function cheetahmail_ccmp_subsrcibe_form($form, &$form_state) {
+  if ($pid = variable_get('livreshebdo_comments_charter_page', FALSE)) {
+    $terms_link = l(t('Conditions générales de vente'), 'node/' . $pid, array('attributes' => array('target' => '_blank')));
+  }
+  else {
+    $terms_link = t('Conditions générales de vente');
+  }
+
+  $form = array(
+    '#tree' => TRUE,
+  );
+
+  $form['newsletter_first_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Prénom'),
+    '#title_display' => 'none',
+    '#required' => TRUE,
+    '#attributes' => array(
+      'autocomplete' => 'off',
+      'tabindex' => '100',
+    ),
+  );
+
+  $form['newsletter_last_name'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Nom'),
+    '#title_display' => 'none',
+    '#required' => TRUE,
+    '#attributes' => array(
+      'autocomplete' => 'off',
+      'tabindex' => '101',
+    ),
+  );
+
+  $form['newsletter_email'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Courriel'),
+    '#title_display' => 'none',
+    '#required' => TRUE,
+    '#clientside_validation_type' => 'email',
+    '#attributes' => array(
+      'autocomplete' => 'off',
+      'tabindex' => '102',
+    ),
+  );
+
+  $form['newsletter_email_confirm'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Confirmation du courriel'),
+    '#title_display' => 'none',
+    '#required' => TRUE,
+    '#clientside_validation_type' => 'email',
+    '#attributes' => array(
+      'autocomplete' => 'off',
+      'tabindex' => '103',
+    ),
+  );
+
+  $form['newsletter_password'] = array(
+    '#type' => 'password',
+    '#title' => t('Mot de passe'),
+    '#title_display' => 'none',
+    '#required' => TRUE,
+    '#attributes' => array(
+      'autocomplete' => 'off',
+      'tabindex' => '104',
+    ),
+  );
+
+  $form['newsletter_password_confirm'] = array(
+    '#type' => 'password',
+    '#title' => t('Confirmation du mot de passe'),
+    '#title_display' => 'none',
+    '#required' => TRUE,
+    '#attributes' => array(
+      'autocomplete' => 'off',
+      'tabindex' => '105',
+    ),
+  );
+
+  $form['newsletter_confirm'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Je m’abonne à La Lettre quotidienne (du lundi au samedi)'),
+    '#title_display' => 'none',
+    '#required' => TRUE,
+    '#attributes' => array(
+      'tabindex' => '106',
+    ),
+  );
+
+  $form['newsletter_terms'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('J’accepte les !link', array('!link' => $terms_link)),
+    '#title_display' => 'none',
+    '#required' => TRUE,
+    '#attributes' => array(
+      'tabindex' => '107',
+    ),
+  );
+
+  $form['newsletter_submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Subscribe'),
+    '#attributes' => array(
+      'tabindex' => '108',
+    ),
+    '#ajax' => array(
+      'callback' => 'cheetahmail_ccmp_user_register_form_ajax_callback',
+      'wrapper' => 'popup-newsletter-form',
+      'method' => 'replace',
+      'effect' => 'fade',
+      'validate_first' => TRUE,
+      'event' => 'click',
+    ),
+  );
+
+  $form['#theme'] = 'cheetahmail_ccmp_subscribe_form';
+  $form['#validate'] = array('cheetahmail_ccmp_user_register_form_validate');
+
+  $definedsettings = clientside_validation_settings_load('custom-forms', 'cheetahmail_ccmp_subsrcibe_form');
+  $definedsettings['settings']['error']['scrollto_errormessage'] = 0;
+  $definedsettings['settings']['error_placement']['error_placement_default'] = 3;
+  $definedsettings['settings']['error']['error_element'] = 'span';
+  $form['#clientside_validation_settings'] = $definedsettings;
+  $form['#after_build'][] = 'clientside_validation_form_after_build';
+
+  return $form;
+}
+
+/**
+ * Ajax callback for cheetahmail_ccmp_subsrcibe_form.
+ */
+function cheetahmail_ccmp_user_register_form_ajax_callback($form, $form_state) {
+  if (isset($form_state['redirect'])) {
+    module_load_include('inc', 'ctools', 'includes/ajax');
+    $commands = array();
+    $commands[] = ctools_ajax_command_redirect($form_state['redirect'][0], 0, $form_state['redirect'][1]);
+    return array('#type' => 'ajax', '#commands' => $commands);
+  }
+  else {
+    $form['#prefix'] = '<div id="popup-newsletter-form">';
+    $form['#suffix'] = '</div>';
+    return $form;
+  }
+}
+
+/**
+ * Newsletter subscribe form submit.
+ */
+function cheetahmail_ccmp_subsrcibe_form_submit($form, &$form_state) {
+  $uid = db_select('users')
+    ->fields('users', array('uid'))
+    ->condition('mail', db_like($form_state['values']['newsletter_email']), 'LIKE')
+    ->range(0, 1)
+    ->execute()
+    ->fetchField();
+
+  if ((bool) $uid) {
+    $account = user_load($uid);
+    // Login user and subscribe to newsletter if username (email) and password
+    // is correct.
+    if (user_authenticate($account->name, $form_state['values']['newsletter_password'])) {
+      $instance = field_info_field('field_newsletter_subscription');
+
+      if (isset($account->field_user_subscriptions[LANGUAGE_NONE][0]['value'])) {
+        $collection = field_collection_item_load($account->field_user_subscriptions[LANGUAGE_NONE][0]['value']);
+        $collection->field_newsletter_subscription[LANGUAGE_NONE] = array();
+        foreach ($instance['settings']['allowed_values'] as $key => $value) {
+          $collection->field_newsletter_subscription[LANGUAGE_NONE][] = array('value' => $key);
+        }
+        $collection->save();
+      }
+
+      $_SESSION['user_newsletter_popup_subscribe'] = TRUE;
+
+      $state = array();
+      $state['uid'] = $account->uid;
+      user_login_submit(array(), $state);
+
+      $form_state['redirect'] = array('user/' . $account->uid, array(
+        'fragment' => 'user-newsletters',
+      ));
+    }
+  }
+  else {
+    $data = array(
+      'name' => $form_state['values']['newsletter_email'],
+      'pass' => $form_state['values']['newsletter_password'],
+      'mail' => $form_state['values']['newsletter_email'],
+      'field_first_name' => array(LANGUAGE_NONE => array(array('value' => $form_state['values']['newsletter_first_name']))),
+      'field_last_name' => array(LANGUAGE_NONE => array(array('value' => $form_state['values']['newsletter_last_name']))),
+      'status' => 1,
+      'init' => $form_state['values']['newsletter_email'],
+    );
+
+    $subscription = array();
+    $instance = field_info_field('field_newsletter_subscription');
+    foreach ($instance['settings']['allowed_values'] as $delta => $name) {
+      $subscription_name = str_replace(' ', '', drupal_strtolower($name));
+      $subscription[$subscription_name] = 'oui';
+    }
+
+    $sic_account = array(
+      'source' => variable_get('sic_username', ''),
+      'prénom' => $form_state['values']['newsletter_first_name'],
+      'nom' => $form_state['values']['newsletter_last_name'],
+      'login' => $form_state['values']['newsletter_email'],
+      'motDePasse' => $form_state['values']['newsletter_password'],
+      'email' => $form_state['values']['newsletter_email'],
+//      'siteLivresHebdoNewsletter' => $subscription,
+    );
+
+    $sic_object = livreshebdo_sic_create_user($sic_account);
+    $new_sic_account = drupal_json_decode($sic_object);
+    if (!empty($new_sic_account['sicId'])) {
+      watchdog('livreshebdo_sic', 'Electre account !account has been created.', array('!account' => $sic_object), WATCHDOG_NOTICE);
+
+      // Subscribe to newsletter if any
+      livreshebdo_sic_subscribe_to_newsletter($new_sic_account['sicId'], array_flip($subscription));
+
+      // Create new account.
+      // Assign 'Membre' role
+      $data['roles'][LIVRESHEBDO_MEMBER_RID] = LIVRESHEBDO_MEMBER_RID;
+      $account = user_save(NULL, $data);
+
+      watchdog('user', 'New user: %name (%email).', array('%name' => $form_state['values']['newsletter_email'], '%email' => $form_state['values']['newsletter_email']), WATCHDOG_NOTICE, l(t('edit'), 'user/' . $account->uid . '/edit'));
+
+      $update_sicid = db_update('users')
+        ->fields(array('sicid' => $new_sic_account['sicId']))
+        ->condition('uid', $account->uid)
+        ->execute();
+
+      // Write new entry in to shib_authmap.
+      $idp = shib_auth_get_idp();
+      db_insert('shib_authmap')
+        ->fields(array(
+          'uid' => $account->uid,
+          'targeted_id' => $account->mail,
+          'idp' => $idp,
+          'created' => time(),
+          'consentver' => shib_auth_config('terms_ver'),
+          ))
+        ->execute();
+
+      // Save mappings of which external authentication module authenticated a user.
+      user_set_authmaps($account, array('auth_shib_auth' => $account->name));
+
+      $instance = field_info_field('field_newsletter_subscription');
+      $field_collection_item = entity_create('field_collection_item', array('field_name' => 'field_user_subscriptions'));
+      $field_collection_item->setHostEntity('user', $account); // Attach it to the user.
+      $field_collection_item->field_newsletter_subscription[LANGUAGE_NONE] = array();
+      foreach ($instance['settings']['allowed_values'] as $key => $value) {
+        $field_collection_item->field_newsletter_subscription[LANGUAGE_NONE][] = array('value' => $key);
+      }
+      $field_collection_item->save(); // Save field-collection item.
+
+      // Login new user, redirect to user profile and open confirm popup.
+      $state = array();
+      $state['uid'] = $account->uid;
+      $state['values'] = $data;
+      user_login_submit(array(), $state);
+
+      $form_state['redirect'] = array('user/' . $account->uid, array(
+        'fragment' => 'user-newsletters',
+      ));
+
+      // Save session var to automatic show confirm popup.
+      $_SESSION['user_newsletter_popup_subscribe'] = TRUE;
+    }
+    else {
+      form_set_error('', t('%sic_error', array('%sic_error' => $sic_object)));
+    }
+  }
+}
+
+/**
+ * Validate for cheetahmail_ccmp_subsrcibe_form.
+ */
+function cheetahmail_ccmp_user_register_form_validate($form, &$form_state) {
+  $user_authenticate = FALSE;
+  $sic_object = livreshebdo_sic_validate_mail($form_state['values']['newsletter_email']);
+
+  $uid = db_select('users')
+    ->fields('users', array('uid'))
+    ->condition('mail', db_like($form_state['values']['newsletter_email']), 'LIKE')
+    ->range(0, 1)
+    ->execute()
+    ->fetchField();
+
+  if ((bool) $uid) {
+    $account = user_load($uid);
+    if (user_authenticate($account->name, $form_state['values']['newsletter_password'])) {
+      $user_authenticate = TRUE;
+    }
+    else {
+      form_set_error('newsletter_email', t('The e-mail address %email is already registered. <a href="@password">Have you forgotten your password?</a>', array('%email' => $form_state['values']['newsletter_email'], '@password' => url('user/password'))));
+    }
+  }
+
+  if (!empty($sic_object) && !$user_authenticate) {
+    form_set_error('newsletter_email', t('The e-mail address %email is already registered. <a href="@password">Have you forgotten your password?</a>', array('%email' => $form_state['values']['newsletter_email'], '@password' => url('user/password'))));
+  }
+}
+
+/**
+ * Build user profile newsletter subscribe form.
+ */
+function cheetahmail_ccmp_user_profile_subsrcibe_form($form, &$form_state, $account) {
+  $form = array(
+    '#tree' => TRUE,
+  );
+
+  $instance = field_info_field('field_newsletter_subscription');
+
+  if (isset($instance['settings']['allowed_values']) && !empty($instance['settings']['allowed_values'])) {
+    if (isset($account->field_user_subscriptions[LANGUAGE_NONE][0]['value'])) {
+      $collection = field_collection_item_load($account->field_user_subscriptions[LANGUAGE_NONE][0]['value']);
+      $newsletter_subscription = field_get_items('field_collection_item', $collection, 'field_newsletter_subscription');
+
+      $defaults = array();
+      if (!empty($newsletter_subscription)) {
+        foreach ($newsletter_subscription as $subscription) {
+          $defaults[] = $subscription['value'];
+        }
+      }
+
+      $form['#account'] = $account;
+
+      $form['newsletter_subscription'] = array(
+        '#type' => 'checkboxes',
+        '#title' => t('Newsletters'),
+        '#title_display' => 'none',
+        '#options' => $instance['settings']['allowed_values'],
+        '#default_value' => $defaults,
+      );
+
+      $form['newsletter_save'] = array(
+        '#type' => 'submit',
+        '#value' => t('Save changes'),
+        '#attributes' => array('class' => array('btn-submit')),
+      );
+    }
+  }
+  $form['#theme'] = 'cheetahmail_ccmp_user_profile_subscribe_form';
+
+  return $form;
+}
+
+function cheetahmail_ccmp_user_profile_subsrcibe_form_submit($form, &$form_state) {
+  $subscribe = FALSE;
+  $account = $form['#account'];
+  if (isset($account->field_user_subscriptions[LANGUAGE_NONE][0]['value'])) {
+    $collection = field_collection_item_load($account->field_user_subscriptions[LANGUAGE_NONE][0]['value']);
+    $collection->field_newsletter_subscription[LANGUAGE_NONE] = array();
+    foreach ($form_state['values']['newsletter_subscription'] as $key => $value) {
+      if ($value) {
+        $collection->field_newsletter_subscription[LANGUAGE_NONE][] = array('value' => $value);
+        $subscribe = TRUE;
+      }
+    }
+    $collection->save();
+
+    $instance = field_info_field('field_newsletter_subscription');
+
+    $subscription = array();
+
+    foreach ($instance['settings']['allowed_values'] as $delta => $name) {
+      $subscription_name = str_replace(' ', '', drupal_strtolower($name));
+      $subscription[$subscription_name] = 'non';
+
+      if (isset($collection->field_newsletter_subscription[LANGUAGE_NONE]) && !empty($collection->field_newsletter_subscription[LANGUAGE_NONE])) {
+        foreach ($collection->field_newsletter_subscription[LANGUAGE_NONE] as $item) {
+          if ($item['value'] == $delta) {
+            $subscription[$subscription_name] = 'oui';
+          }
+        }
+      }
+    }
+
+    foreach ($subscription as $key => $subs) {
+      if ($subs != 'oui') {
+        unset($subscription[$key]);
+      }
+    }
+
+    livreshebdo_sic_subscribe_to_newsletter(
+      (int) livreshebdo_sic_get_user_sicid($account->uid),
+      array_keys($subscription)
+    );
+
+//    $sic_account = array(
+//      'sicId' => (int) livreshebdo_sic_get_user_sicid($account->uid),
+//      'siteLivresHebdoNewsletter' => $subscription,
+//    );
+//
+//    livreshebdo_sic_update_user($sic_account);
+  }
+
+  if ($subscribe) {
+    $_SESSION['user_newsletter_popup_subscribe'] = TRUE;
+    $_SESSION['user_newsletter_popup_unsubscribe'] = FALSE;
+  }
+  else {
+    $_SESSION['user_newsletter_popup_subscribe'] = FALSE;
+    $_SESSION['user_newsletter_popup_unsubscribe'] = TRUE;
+  }
+  $form_state['redirect'] = array('user/' . $account->uid, array(
+    'fragment' => 'user-newsletters',
+  ));
+}
+
+/**
+ * Processing $node and send newsletter. Call by livreshebdo_site_sendmail_createxml
+ */
+function cheetahmail_ccmp_processing_node($node) {
+  $processed = FALSE;
+  if (is_object($node) && isset($node->status) && $node->status && $node->type == cheetahmail_ccmp_CT_NAME) {
+    // Send newsletter to Cheetahmail.
+    if (isset($node->field_newsletter_send[LANGUAGE_NONE][0]['value']) && (bool) $node->field_newsletter_send[LANGUAGE_NONE][0]['value']) {
+      $provider = variable_get('cheetahmail_ccmp_provider', 'cheetahmail');
+      if ($provider == 'cheetahmail') {
+        cheetahmail_ccmp_electre_force_ping($node, cheetahmail_ccmp_ELECTRE_FORCE_ACTION_EXPORT);
+      }
+      $data = _cheetahmail_ccmp_get_content($node);
+      $data_text = _cheetahmail_ccmp_get_content_text($node);
+      if (!empty($data)) {
+        if ($provider == 'cheetahmail') {
+          $processed = cheetahmail_ccmp_send_to_cheetahmail($node, $data);
+        }
+        else {
+          module_load_include('inc', 'cheetahmail_ccmp', 'includes/cheetahmail_ccmp.ccmp');
+          $api = new CCMP_Newsletters_API();
+          $contentblock = $api->createContentBlock($node->field_newsletter_title[LANGUAGE_NONE][0]['value']);
+          $compaign = $api->createEmailCampaign(variable_get('ccmp_newsletters_filter_id', 0), $node->field_newsletter_title[LANGUAGE_NONE][0]['value'], $data, $contentblock['result'], $data_text);
+          $launch = $api->launchEmailCampaign($compaign['result']);
+          if ($launch['code'] == 200) {
+            $processed = TRUE;
+          }
+        }
+      }
+      else {
+        watchdog(
+          cheetahmail_ccmp_LOG,
+          'Node !nid content looks empty. The message was not sent to cheetahmail',
+          array(
+            '!nid'      => $node->nid
+          )
+        );
+      }
+    }
+  }
+  return $processed;
+}
+
+/**
+ * Implements hook_node_insert().
+ */
+function cheetahmail_ccmp_node_update($node) {
+  if (is_object($node) && isset($node->status) && $node->status && $node->type == cheetahmail_ccmp_CT_NAME) {
+    cheetahmail_ccmp_node_save_html($node);
+  }
+  // Clear cashe for node fields.
+  cache_clear_all("field:node:$node->nid", "cache_field");
+}
+
+/**
+ * Helper function to save newsletter node as html.
+ */
+function cheetahmail_ccmp_node_save_html($node) {
+  $data = _cheetahmail_ccmp_get_content($node);
+
+  $filename = transliteration_clean_filename($node->title . '.html');
+
+  $path = 'public://' . cheetahmail_ccmp_FILES_DESTINATION;
+  file_prepare_directory($path, FILE_CREATE_DIRECTORY);
+  $file = file_save_data($data, $path . '/' . $filename, FILE_EXISTS_REPLACE);
+
+  $file_url = file_create_url($path . '/' . $filename);
+  watchdog('cheetahmail_ccmp', 'Newsletter @title was generated @url.',
+    array(
+      '@title' => $node->title,
+      '@url' => $file_url,
+    ),
+    WATCHDOG_NOTICE, $file_url);
+
+  if ($node->status == NODE_PUBLISHED) {
+    cheetahmail_ccmp_electre_force_ping($node, $file_url, cheetahmail_ccmp_ELECTRE_FORCE_ACTION_PUBLICATION);
+  }
+}
+
+/**
+ * Function to send content to cheetahmail;
+ * @param $node
+ */
+function cheetahmail_ccmp_send_to_cheetahmail($node, $data) {
+  $message_was_sent = FALSE;
+
+  $client = cheetahmail_ccmp_cheetahmail_client(cheetahmail_ccmp_CHEETAHMAIL_TYPE_CAMPAIGN);
+
+  if (!$client) {
+    watchdog(
+      cheetahmail_ccmp_LOG,
+      'Trying to send newsletter for !url: access params are not configured',
+      array('!url'    => url('node/' . $node->nid)),
+      WATCHDOG_ERROR
+    );
+    drupal_set_message(t('Cheetahmail: access params are not configured'), 'error');
+    return FALSE;
+  }
+
+  $cheetahmail_config_id = variable_get('cheetahmail_ccmp_cheetahmail_config_default', NULL);
+
+  if (!$cheetahmail_config_id) {
+    watchdog(
+      cheetahmail_ccmp_LOG,
+      'Trying to send newsletter for !url: configuration is not selected',
+      array('!url'    => url('node/' . $node->nid)),
+      WATCHDOG_ERROR
+    );
+    drupal_set_message(t('Cheetahmail: configuration is not selected'), 'error');
+    return FALSE;
+  }
+
+  $configs = cheetahmail_ccmp_load_config($cheetahmail_config_id);
+  if (!$configs || !isset($configs->configs)) {
+    watchdog(
+      cheetahmail_ccmp_LOG,
+      'Trying to send newsletter for !url: selected configuration is corrupted',
+      array('!url'    => url('node/' . $node->nid)),
+      WATCHDOG_ERROR
+    );
+    drupal_set_message(t('Cheetahmail: selected configuration is corrupted'), 'error');
+    return FALSE;
+  }
+
+  $configs = (object)unserialize($configs->configs);
+  $cheetahmail_config_id = $configs->idConf;
+
+  //@todo - delete this
+  $cheetahmail_config_id = 459848;
+  //@todo - end delete this
+
+  $newsletter_type = NULL;
+  if (isset($node->field_newsletter_type[LANGUAGE_NONE][0]['target_id'])) {
+    if ($term = taxonomy_term_load($node->field_newsletter_type[LANGUAGE_NONE][0]['target_id'])) {
+      $newsletter_type = $term->name;
+    }
+  }
+
+  $newsletter_title = $node->field_newsletter_title[LANGUAGE_NONE][0]['value'];
+  if ($node->field_newsletter_type[LANGUAGE_NONE][0]['target_id'] == cheetahmail_ccmp_TYPE_DERNIERE_MINUTE_TID) {
+    $newsletter_article = node_load($node->field_newsletter_article[LANGUAGE_NONE][0]['target_id']);
+    if ($newsletter_article) {
+      $newsletter_title = $newsletter_article->title;
+    }
+  }
+
+  $description = t(
+    '@type: @title - @date',
+    array(
+      '@type'   => $newsletter_type ? $newsletter_type : 'Undefined',
+      '@title'  => $newsletter_title,
+      '@date'   => $node->field_newsletter_date[LANGUAGE_NONE][0]['value']
+    )
+  );
+
+  $campaign_params = array(
+    'isPrivate'   => FALSE,
+    'description' => $description,
+    'filters' => array(
+      'fieldFilterId'       => variable_get('cheetahmail_ccmp_cheetahmail_config_filter', 0),
+      'behavioralFilterId'  => 0,
+      'sqlQueryFilterId'    => 0,
+      'targetId'            => 0
+    ),
+    'folderId' => 0
+  );
+
+  $send_date = isset($node->field_newsletter_send_date[LANGUAGE_NONE][0]['value']) ? $node->field_newsletter_send_date[LANGUAGE_NONE][0]['value'] : REQUEST_TIME;
+
+  $sent_params = array(
+    'speed'           => variable_get('cheetahmail_ccmp_cheetahmail_speed', 'SPEED_INCONNU'),
+    'configId'        => $cheetahmail_config_id,
+    'wishdate'        => format_date($send_date, 'custom', 'Y-m-d\TH:i:s'),
+    'percentil'       => '',
+    'randomize'       => FALSE,
+    'mailboxMonitor'  => FALSE,
+  );
+
+  $message_params = array(
+    'subject'   => $newsletter_title,
+    'format'    => LIVRESHEBD_NEWSLETTER_CHEETAHMAIL_SEND_FORMAT_HTML,
+    'priority'  => variable_get('cheetahmail_ccmp_cheetahmail_priority', 3),
+    'htmlSrc'   => $data,
+    'txtSrc'    => ''
+  );
+
+  $params = array(
+    'campaignParams'  => $campaign_params,
+    'sentParams'      => $sent_params,
+    'messageParams'   => $message_params,
+  );
+
+  $tracing_is_enabled = variable_get('cheetahmail_ccmp_cheetahmail_debug_ws', 0);
+
+  try {
+    $result = $client->Create($params);
+    drupal_set_message(t('Newsletter was sent successfully to cheetahmail'));
+    $message_was_sent = TRUE;
+    if ($tracing_is_enabled) {
+      watchdog(
+        cheetahmail_ccmp_LOG,
+        'Trying to send newsletter for !url: result: !value. Request: !request, response: !response',
+        array(
+          '!url'      => url('node/' . $node->nid),
+          '!value'    => print_r($result->CreateResult, TRUE),
+          '!request'  => htmlentities($client->__getLastRequest()),
+          '!response' => htmlentities($client->__getLastResponse())
+        )
+      );
+    }
+  }
+  catch(SoapFault $e) {
+    drupal_set_message(t('Unable to send newsletter: cheetahmail returned an error @error', array('@error' => $e->getMessage())), 'error');
+    watchdog(
+      cheetahmail_ccmp_LOG,
+      'Trying to send newsletter for !url: error: !error. Request: !request, response: !response',
+      array(
+        '!url'      => url('node/' . $node->nid),
+        '!error'    => $e->getMessage(),
+        '!request'  => $tracing_is_enabled ? htmlentities($client->__getLastRequest()) : 'Tracing is disabled',
+        '!response' => $tracing_is_enabled ? htmlentities($client->__getLastResponse()): 'Tracing is disabled'
+      ),
+      WATCHDOG_ERROR
+    );
+  }
+  return $message_was_sent;
+}
+
+/**
+ * Helper function to ping
+ */
+function cheetahmail_ccmp_electre_force_ping($node, $file_url, $action = cheetahmail_ccmp_ELECTRE_FORCE_ACTION_PUBLICATION) {
+  $curl = curl_init();
+  curl_setopt($curl, CURLOPT_URL, cheetahmail_ccmp_ELECTRE_FORCE_URL);
+  curl_setopt($curl, CURLOPT_HEADER, 1);
+  curl_setopt($curl, CURLOPT_POST, 1);
+  curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+
+  $type = NULL;
+  if (isset($node->field_newsletter_type[LANGUAGE_NONE][0]['target_id'])) {
+    if ($term = taxonomy_term_load($node->field_newsletter_type[LANGUAGE_NONE][0]['target_id'])) {
+      $type = $term->name;
+    }
+  }
+
+  $send_date = isset($node->field_newsletter_send_date[LANGUAGE_NONE][0]['value']) ? $node->field_newsletter_send_date[LANGUAGE_NONE][0]['value'] : REQUEST_TIME;
+
+  $query = array(
+    'Action'  => $action,
+    'Type'    => $type,
+    'Numero'  => format_date($send_date, 'custom', 'dmyHi'),
+    'URL'     => $file_url,
+  );
+
+  $params = drupal_http_build_query($query);
+
+  curl_setopt($curl, CURLOPT_POSTFIELDS, $params);
+  $res = curl_exec($curl);
+  curl_close($curl);
+
+  return $res;
+}
+
+/**
+ * Helper function to get newsletter promotional css.
+ *
+ * @return string
+ *   Newsletter CSS.
+ */
+function cheetahmail_ccmp_get_promotional_css() {
+  $cache_key = 'cheetahmail_ccmp_promotional_css';
+
+  if ($cache = cache_get($cache_key)) {
+    $css = $cache->data;
+  }
+  else {
+    $backgrounds = array(
+      'pb_newsletter',
+    );
+
+    $data = array();
+
+    foreach ($backgrounds as $name) {
+      if (variable_get($name . '_flag', FALSE)) {
+        $flag[$name] = FALSE;
+        $image_header = file_load(variable_get($name . '_image_header', ''));
+        if ($image_header) {
+          $image_header_url = file_create_url($image_header->uri);
+        }
+        $image_footer = file_load(variable_get($name . '_image_footer', ''));
+        if ($image_footer) {
+          $image_footer_url = file_create_url($image_footer->uri);
+        }
+        $data[$name] = array(
+          'header' => !empty($image_header_url) ? $image_header_url : NULL,
+          'footer' => !empty($image_footer_url) ? $image_footer_url : NULL,
+          'color' => '#' . variable_get($name . '_color', NULL),
+        );
+        $data[$name] = array_filter($data[$name]);
+
+        unset($image_header, $image_header_url, $image_footer, $image_footer_url);
+      }
+    }
+
+    $css = array();
+
+    if (!empty($data['pb_newsletter'])) {
+      if (!empty($data['pb_newsletter']['footer']) && !empty($data['pb_newsletter']['color'])) {
+        $css['footer'] = "background: url('" . $data['pb_newsletter']['footer'] . "') no-repeat scroll 50% 100% " . $data['pb_newsletter']['color'] . "\n";
+      }
+      elseif (!empty($data['pb_newsletter']['footer']) && empty($data['pb_newsletter']['color'])) {
+        $css['footer'] = "background: url('" . $data['pb_newsletter']['footer'] . "') no-repeat scroll 50% 100%\n";
+      }
+
+      if (!empty($data['pb_newsletter']['header'])) {
+        $css['header'] = "padding: 100px 100px 260px; background: url('" . $data['pb_newsletter']['header'] . "') no-repeat scroll 50% 0px transparent\n";
+      }
+
+//      if (!empty($data['pb_newsletter']['header']) && !empty($data['pb_newsletter']['color'])) {
+//        $css['header'] = "padding: 100px 100px 260px; background: url('" . $data['pb_newsletter']['header'] . "') no-repeat scroll 50% 0px " . $data['pb_newsletter']['color'] . "\n";
+//      }
+//      elseif (!empty($data['pb_newsletter']['header']) && empty($data['pb_newsletter']['color'])) {
+//        $css['header'] = "padding: 100px 100px 260px; background: url('" . $data['pb_newsletter']['header'] . "') no-repeat scroll 50% 0px transparent\n";
+//      }
+    }
+
+    cache_set($cache_key, $css);
+  }
+
+  return $css;
+}
+
+/**
+ * Loads config from database;
+ *
+ * @param $config_id
+ */
+function cheetahmail_ccmp_load_config($config_id) {
+
+  $result = db_select('cheetahmail_ccmp_configs', 'lnc')
+    ->fields('lnc', array('cid', 'name', 'configs'))
+    ->condition('cid', $config_id)
+    ->range(0,1)
+    ->execute()
+    ->fetchAssoc();
+
+  if ($result) {
+    return (object)$result;
+  }
+}
+
+function cheetahmail_ccmp_popup_ajax_callback() {
+  $render = array(
+    '#theme' => 'cheetahmail_ccmp_popup1',
+    '#subscribe_form' => drupal_get_form('cheetahmail_ccmp_subsrcibe_form'),
+  );
+  $output = drupal_render($render);
+
+  $commands = array();
+  $commands[] = ajax_command_html('#newsletter-popup1', $output);
+  $commands[] = ajax_command_invoke(NULL, 'afterLoadNewsletterContent');
+  return array('#type' => 'ajax', '#commands' => $commands);
+}
+
+function _cheetahmail_ccmp_get_content($node) {
+  $url = url('node/' . $node->nid, array('absolute' => TRUE, 'query' => array('t' => mktime())));
+  if (in_array(parse_url($url, PHP_URL_HOST), explode(',', LIVRESHEBDO_HTACCESS_AUTH_HOSTS))) {
+    $new_url = parse_url($url, PHP_URL_SCHEME) . '://';
+    $new_url .= LIVRESHEBDO_HTACCESS_LOGIN . ':' . LIVRESHEBDO_HTACCESS_PASSWORD . '@';
+    $new_url .= parse_url($url, PHP_URL_HOST) . parse_url($url, PHP_URL_PATH);
+    $url = $new_url;
+  }
+  return @file_get_contents($url);
+}
+
+function _cheetahmail_ccmp_get_content_text($node) {
+  $body = '';
+  $articles = field_get_items('node', $node, 'field_newsletter_article');
+  foreach ($articles as $value) {
+    $article = node_load($value['target_id']);
+    $body .= $article->title;
+    $body .= "\n";
+    $body_field =  field_get_items('node', $article, 'body');
+    $body .= $body_field[0]['value'];
+    $body .= "\n\n";
+  }
+  
+  return $body;
+}

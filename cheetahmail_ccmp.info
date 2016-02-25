@@ -1,0 +1,12 @@
+name = Experian Cheetahmail base
+description = Integrates the Drupal mail with Experian Cheetahmail through new REST API
+package = Experian
+core = "7.x"
+project = "cheetahmail"
+
+configure = admin/config/cheetahmail
+;files[] = 
+;files[] = api/EMSWebService.php
+
+;dependencies[] =
+

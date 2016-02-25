@@ -1,0 +1,7 @@
+<?php
+/**
+ * @file
+ * Code for the Newsletter CT feature.
+ */
+
+include_once 'newsletter_ct.features.inc';
